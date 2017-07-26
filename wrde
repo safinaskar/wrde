@@ -1,0 +1,38 @@
+#!/bin/false
+
+! type bash > /dev/null 2>&1 && WRDE_NO_READLINE=x
+
+wrde_read_cmd(){
+	if [ -n "$WRDE_NO_READLINE" ]; then
+		printf 'wrde> ' # В POSIX'е 2008 нет "read -p"
+		read -r WRDE_COMMAND
+	else
+		if [ -n "$BASH" ]; then
+			read -erp 'wrde> ' WRDE_COMMAND
+		else
+			# Нужно обязательно использовать -p, так как иначе Readline будет неправильно работать
+			WRDE_COMMAND="$(bash -c 'read -erp "wrde> " WRDE_COMMAND && echo "$WRDE_COMMAND"')" # Not portable: если bash вернёт неноль, то не факт, что wrde_read_cmd тоже вернёт неноль
+		fi
+	fi
+}
+
+if ( : > /dev/tty ) 2> /dev/null; then
+	WRDE_TTY=/dev/tty
+else
+	WRDE_TTY=/dev/console
+fi
+
+# Возможно, not portable: я не уверен, что этот блок не откроет subshell
+{
+	echo
+	echo "While-Read-Do-Eval. Type \"break\" to exit. Set WRDE_NO_READLINE to disable Readline. Run \"WRDE_NO_READLINE=x rlwrap ./script.sh\" to get normal Readline"
+
+	while :; do
+		if ! wrde_read_cmd; then
+			echo break
+			break
+		fi
+		eval "$WRDE_COMMAND" || :
+	done
+	: # чтобы wrde вернул true, даже если user набрал "break"
+} < "$WRDE_TTY" > "$WRDE_TTY" 2>&1
